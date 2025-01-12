@@ -1,80 +1,138 @@
-// Set up the canvas and context
-const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
-
-const width = canvas.width;
-const height = canvas.height;
-
-// Game variables
-let isGameRunning = false;
-let score = 0;
-let keyPresses = { 'A': false, 'S': false, 'D': false, 'F': false };
-
 // Web Audio API setup
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 let audioBuffer;
+let analyzer;
+let isBeatDetected = false;  // Track beat detection status
+let isGameRunning = false;
+let score = 0;
 
 // Create a GainNode for volume control
 const gainNode = audioContext.createGain();
 gainNode.connect(audioContext.destination);
-gainNode.gain.value = 0.5;  // Default volume set to 50%
+gainNode.gain.value = 0.3;  // Default volume set to 30%
 
-// Note class to define the visual notes
-class Note {
-    constructor(x, y, key, time) {
-        this.x = x;
-        this.y = y;
-        this.key = key; // Which key (A, S, D, F) corresponds to this note
-        this.time = time; // Time when the note should appear
-    }
+// Canvas setup
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const width = canvas.width;
+const height = canvas.height;
 
-    // Update the note's position
-    update() {
-        this.y += 3; // Move the note downwards (adjust speed as needed)
-    }
-
-    // Render the note on the canvas
-    render() {
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, 20, 0, 2 * Math.PI);
-        ctx.fillStyle = 'blue';
-        ctx.fill();
-        ctx.stroke();
-    }
-}
-
+// Notes array (holds all note objects)
 let notes = [];
+
+// Meyda setup for energy detection (alternative to beats if not available)
+async function setupMeyda() {
+    if (!audioContext || !audioBuffer) return;  // Ensure that audioContext and audioBuffer are available
+
+    console.log("Available features:", Meyda.featureExtractors);  // Log available features
+
+    // Initialize the source (BufferSourceNode) after audio buffer is ready
+    const source = audioContext.createBufferSource();
+    source.buffer = audioBuffer;  // Set the buffer after creating the source
+    source.connect(gainNode);  // Connect the source to the gain node
+
+    // Initialize the Meyda analyzer with the correctly set up source
+    analyzer = Meyda.createMeydaAnalyzer({
+        audioContext: audioContext,
+        source: source,
+        bufferSize: 512,  // Buffer size for feature extraction
+        featureExtractors: ["energy"],  // Use "energy" for beat detection
+    });
+
+    // Start the audio playback after the analyzer is initialized
+    source.start();
+}
 
 // Load the music file
 async function loadMusic(url) {
     const response = await fetch(url);
     const arrayBuffer = await response.arrayBuffer();
     audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+    // Now that the buffer is loaded, set up the Meyda analyzer
+    await setupMeyda();  // Set up the Meyda analyzer after the audioBuffer is decoded
+    console.log('Music loaded and analyzer set up');
 }
 
 // Play the loaded music
 function playMusic() {
     const source = audioContext.createBufferSource();
-    source.buffer = audioBuffer;
+    source.buffer = audioBuffer;  // Set the audio buffer
     source.connect(gainNode);  // Connect the source to the gain node
-    source.start();
+    source.start();  // Start playback
 }
 
-// Generate notes based on the music's current time
+// Note class to define the visual notes
+class Note {
+    constructor(x, y, key) {
+        this.x = x;
+        this.y = y;
+        this.key = key; // Which key corresponds to this note
+        this.scale = 1; // Default scale for the note
+        this.isBouncing = false; // Flag to determine if the note is reacting to the beat
+    }
+
+    // Update the note's position and handle beat reaction
+    update() {
+        this.y += 3; // Move the note downwards (adjust speed as needed)
+
+        if (this.isBouncing) {
+            this.scale = 1.2;  // Scale up the note when reacting to a beat
+        } else {
+            this.scale = 1; // Reset scale when not reacting
+        }
+    }
+
+    // Render the note on the canvas
+    render() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 20 * this.scale, 0, 2 * Math.PI);
+        ctx.fillStyle = 'blue';
+        ctx.fill();
+        ctx.stroke();
+    }
+
+    // React to the beat by scaling up and bouncing
+    reactToBeat() {
+        this.isBouncing = true;
+        setTimeout(() => {
+            this.isBouncing = false;  // Stop the bounce after a short delay
+        }, 100); // Bounce duration (in ms)
+    }
+}
+
+// Generate notes based on the energy feature (alternative to beats)
 function generateNotes() {
-    const currentTime = audioContext.currentTime;
+    // Use Meyda to check for energy levels
+    const energy = analyzer.get("energy");
+    if (energy && energy > 0.2 && !isBeatDetected) {  // Adjust threshold based on energy level
+        // Beat detected (based on energy threshold), generate notes based on timing
+        const currentTime = audioContext.currentTime;
+        const laneWidth = width / 5;
+        const noteKey = ['A', 'S', 'D', 'F'][Math.floor(Math.random() * 4)]; // Randomly pick a key
+        let xPosition = 0;
 
-    // For simplicity, generate notes for each key every second
-    // Adjust to synchronize with your actual music timing
-    if (Math.floor(currentTime) % 2 === 0) { // Example condition for demo
-        // Generate notes for each key (A, S, D, F) at different X positions (lanes)
-        const laneWidth = width / 5; // Divide canvas into 5 parts for lane positioning
-        const newNoteA = new Note(laneWidth * 1, 0, 'A', currentTime); // A -> Left lane
-        const newNoteS = new Note(laneWidth * 2, 0, 'S', currentTime); // S -> 2nd lane
-        const newNoteD = new Note(laneWidth * 3, 0, 'D', currentTime); // D -> 3rd lane
-        const newNoteF = new Note(laneWidth * 4, 0, 'F', currentTime); // F -> Right lane
+        // Position the note based on the key
+        if (noteKey === 'A') {
+            xPosition = laneWidth * 1;
+        } else if (noteKey === 'S') {
+            xPosition = laneWidth * 2;
+        } else if (noteKey === 'D') {
+            xPosition = laneWidth * 3;
+        } else if (noteKey === 'F') {
+            xPosition = laneWidth * 4;
+        }
 
-        notes.push(newNoteA, newNoteS, newNoteD, newNoteF);
+        // Create the note at the generated position
+        const note = new Note(xPosition, 0, noteKey);  // Create note
+        notes.push(note);  // Push the note into the array
+        isBeatDetected = true;  // Set the flag to avoid multiple detections in quick succession
+
+        // React to the beat immediately after the note is created
+        note.reactToBeat();
+    }
+    if (energy < 0.2) {
+        isBeatDetected = false; // Reset if energy drops below threshold
     }
 }
 
@@ -90,18 +148,9 @@ function checkNoteHit() {
     });
 }
 
-// Update the game state
-function update() {
-    generateNotes();
-    notes.forEach(note => {
-        note.update();
-    });
-    checkNoteHit();
-}
-
 // Render the game elements
 function render() {
-    ctx.clearRect(0, 0, width, height); // Clear the canvas
+    ctx.clearRect(0, 0, width, height);  // Clear the canvas
 
     // Display the score
     ctx.fillStyle = 'black';
@@ -114,7 +163,7 @@ function render() {
     const seconds = Math.floor(currentTime % 60);
     const formattedTime = `${minutes}:${seconds < 10 ? '0' + seconds : seconds}`;
     
-    ctx.fillText('Time: ' + formattedTime, 10, 70); // Display time
+    ctx.fillText('Time: ' + formattedTime, 10, 70);  // Display time
 
     // Render the notes
     notes.forEach(note => {
@@ -123,7 +172,7 @@ function render() {
 
     // Render track lanes (centered based on canvas width)
     const laneWidth = width / 5;
-    ctx.strokeStyle = 'gray';
+    ctx.strokeStyle = 'white';
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(laneWidth * 1, 0);
@@ -135,9 +184,34 @@ function render() {
     ctx.moveTo(laneWidth * 4, 0);
     ctx.lineTo(laneWidth * 4, height);
     ctx.stroke();
+
+    // Highlight the pressed keys with smooth animations and display letters
+    Object.keys(keyPresses).forEach(key => {
+        if (keyPresses[key]) {
+            ctx.fillStyle = 'blue';  // Color when key is pressed
+            ctx.beginPath();
+            const laneWidth = width / 5;
+            let xPos = 0;
+            if (key === 'A') xPos = laneWidth * 1;
+            if (key === 'S') xPos = laneWidth * 2;
+            if (key === 'D') xPos = laneWidth * 3;
+            if (key === 'F') xPos = laneWidth * 4;
+            ctx.arc(xPos, height - 50, 25, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // Display the letter in the pressed key's lane
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 30px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(key, xPos, height - 40);  // Display the key
+        }
+    });
 }
 
 // Handle key press events
+const keyPresses = { 'A': false, 'S': false, 'D': false, 'F': false };
+
 document.addEventListener('keydown', function(event) {
     if (event.key === 'a') keyPresses['A'] = true;
     if (event.key === 's') keyPresses['S'] = true;
@@ -151,6 +225,15 @@ document.addEventListener('keyup', function(event) {
     if (event.key === 'd') keyPresses['D'] = false;
     if (event.key === 'f') keyPresses['F'] = false;
 });
+
+// Update the game state
+function update() {
+    generateNotes();
+    notes.forEach(note => {
+        note.update();
+    });
+    checkNoteHit();
+}
 
 // Start the game loop (60 FPS)
 function gameLoop() {
