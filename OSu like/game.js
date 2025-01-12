@@ -150,20 +150,22 @@ function checkNoteHit() {
 
 // Render the game elements
 function render() {
-    ctx.clearRect(0, 0, width, height);  // Clear the canvas
+    // Clear the canvas
+    ctx.clearRect(0, 0, width, height);  // Clear the entire canvas before drawing each frame
 
-    // Display the score
-    ctx.fillStyle = 'black';
-    ctx.font = '30px Arial';
-    ctx.fillText('Score: ' + score, 10, 30);  // Display score
+    // Display the score at a fixed position (top left corner)
+    ctx.fillStyle = 'gray';
+    ctx.font = '20px Arial';
+    ctx.textAlign = 'left';  // Align text to the left
+    ctx.fillText('Score: ' + score, 10, 30);  // Display score at (10, 30)
 
-    // Display the current music time
+    // Display the current music time (top right corner)
     const currentTime = audioContext.currentTime;
     const minutes = Math.floor(currentTime / 60);
     const seconds = Math.floor(currentTime % 60);
     const formattedTime = `${minutes}:${seconds < 10 ? '0' + seconds : seconds}`;
     
-    ctx.fillText('Time: ' + formattedTime, 10, 70);  // Display time
+    ctx.fillText('Time: ' + formattedTime, width - 150, 30);  // Display time at top right corner
 
     // Render the notes
     notes.forEach(note => {
@@ -190,7 +192,6 @@ function render() {
         if (keyPresses[key]) {
             ctx.fillStyle = 'blue';  // Color when key is pressed
             ctx.beginPath();
-            const laneWidth = width / 5;
             let xPos = 0;
             if (key === 'A') xPos = laneWidth * 1;
             if (key === 'S') xPos = laneWidth * 2;
@@ -204,7 +205,7 @@ function render() {
             ctx.fillStyle = 'white';
             ctx.font = 'bold 30px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText(key, xPos, height - 40);  // Display the key
+            ctx.fillText(key, xPos, height - 40);  // Display the key letter
         }
     });
 }
