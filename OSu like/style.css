@@ -8,10 +8,10 @@ body {
   flex-direction: column;
   text-align: center;
 }
-  canvas {
-    border: 1px solid #fff;
-  }
-  /* Game Canvas */
+canvas {
+  border: 1px solid #fff;
+}
+/* Game Canvas */
 #gameCanvas {
   border: 2px solid #333;
   background-color: #202020;
@@ -67,11 +67,27 @@ label {
 /* Center the buttons and adjust layout */
 button,
 label,
-#volumeSlider {
-  margin-top: 10px;
-}
-
 #startButton {
   display: inline-block;
   margin-top: 10px;
+}
+#volumeSlider {
+  margin-top: 10px;
+  -webkit-appearance: none;
+  width: 50%;
+  height: 15px;
+  background: #000;
+  outline: none;
+  border: 5px solid blue;
+  border-radius: 8px;
+}
+#volumeSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 60px;
+  background: #000;
+  cursor: pointer;
+  border: 5px solid blue;
+  border-radius: 4px;
 }

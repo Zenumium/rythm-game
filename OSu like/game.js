@@ -6,6 +6,7 @@ let isBeatDetected = false;
 let smoothedEnergy = 0; // For smoothing energy data
 let isGameRunning = false;
 let score = 0;
+let misses = 0; // Miss counter
 
 // Create a GainNode for volume control
 const gainNode = audioContext.createGain();
@@ -34,7 +35,7 @@ async function setupMeyda() {
   analyzer = Meyda.createMeydaAnalyzer({
     audioContext: audioContext,
     source: source,
-    bufferSize: 512,
+    bufferSize: 256,
     featureExtractors: ["energy"],
   });
 
@@ -88,8 +89,9 @@ class Note {
     setTimeout(() => (this.isBouncing = false), 100);
   }
 }
+
 // Note generation settings
-let noteGenerationInterval = 600; // Time in milliseconds between note generations
+let noteGenerationInterval = 650; // Time in milliseconds between note generations
 let lastNoteGenerationTime = 0;
 
 // Generate notes based on energy and timer
@@ -122,25 +124,65 @@ function generateNotes() {
 
   if (energy < 0.2) isBeatDetected = false;
 }
+
 // Check for note hits
 function checkNoteHit() {
-  notes.forEach((note) => {
+  notes.forEach((note, index) => {
     if (note.y >= 550 && note.y <= 600 && keyPresses[note.key]) {
       score += 10;
-      notes.splice(notes.indexOf(note), 1);
+      notes.splice(index, 1);
     }
   });
+}
+
+// Update game state
+function update() {
+  generateNotes();
+  notes.forEach((note, index) => {
+    note.update();
+
+    // Check if the note is missed
+    if (note.y > height) {
+      misses++; // Increment miss counter
+      notes.splice(index, 1); // Remove the missed note
+    }
+  });
+  checkNoteHit();
+}
+
+// Reactive background based on energy
+function drawReactiveBackground() {
+  if (analyzer) {
+    const energy = analyzer.get("energy");
+
+    // Map energy to color intensity (0 to 255)
+    const intensity = Math.min(Math.max(Math.floor(energy * 255), 0), 255);
+
+    // Create a gradient or solid color background
+    const gradient = ctx.createLinearGradient(0, 0, width, height);
+    gradient.addColorStop(0, `rgb(${intensity}, 50, 150)`); // Base color
+    gradient.addColorStop(1, `rgb(30, ${intensity}, 160)`); // Lighter color
+
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+  } else {
+    // Fallback background if analyzer is not ready
+    ctx.fillStyle = "black";
+    ctx.fillRect(0, 0, width, height);
+  }
 }
 
 // Render game elements
 function render() {
   ctx.clearRect(0, 0, width, height);
+  drawReactiveBackground();
 
-  // Score and time display
+  // Display score and misses
   ctx.fillStyle = "white";
   ctx.font = "20px Arial";
   ctx.textAlign = "left";
   ctx.fillText(`Score: ${score}`, 10, 30);
+  ctx.fillText(`Misses: ${misses}`, 10, 60); // New line for misses
 
   const currentTime = audioContext.currentTime;
   const minutes = Math.floor(currentTime / 60);
@@ -194,16 +236,15 @@ document.addEventListener("keyup", (event) => {
   }
 });
 
-// Update game state
-function update() {
-  generateNotes();
-  notes.forEach((note) => note.update());
-  checkNoteHit();
-}
-
 // Game loop
 function gameLoop() {
   if (isGameRunning) {
+    if (misses >= 15) {
+      // End game if too many misses
+      isGameRunning = false;
+      alert("Game Over! Too many misses.");
+      return;
+    }
     update();
     render();
     requestAnimationFrame(gameLoop);
@@ -214,7 +255,7 @@ function gameLoop() {
 document.getElementById("startButton").addEventListener("click", () => {
   audioContext.resume().then(() => {
     if (!isGameRunning) {
-      loadMusic("HAYWIRE!.mp3").then(() => {
+      loadMusic("EGO!.mp3").then(() => {
         playMusic();
         isGameRunning = true;
         gameLoop();
